@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>덕톡방 계급 판독기 V2</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 350px;
+            position: relative; /* 자동완성 목록 위치 기준 */
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        /* 입력창 래퍼 (위치 잡기용) */
+        .input-wrapper {
+            position: relative;
+            width: 100%;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+        }
+        input {
+            width: 80%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        /* 자동완성 목록 스타일 */
+        .suggestions-list {
+            position: absolute;
+            top: 100%; /* 입력창 바로 아래 */
+            left: 50%;
+            transform: translateX(-50%); /* 가운데 정렬 */
+            width: 85%; /* 입력창보다 살짝 넓게 */
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 0 0 5px 5px;
+            max-height: 150px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+            display: none; /* 평소엔 숨김 */
+            text-align: left;
+        }
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9rem;
+            color: #333;
+        }
+        .suggestion-item:hover {
+            background-color: #f0f2f5;
+        }
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        button {
+            width: 88%;
+            padding: 10px;
+            background-color: #fee500;
+            color: #3c1e1e;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #fdd835;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background-color: #fafafa;
+            display: none;
+        }
+        .level-emoji {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .level-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .stats {
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎁 덕톡방 계급 판독기</h1>
+    <p style="font-size: 0.9rem; color: #888; margin-bottom: 20px;">닉네임을 입력하면 자동으로 찾아드려요!</p>
+    
+    <div class="input-wrapper">
+        <input type="text" id="nicknameInput" placeholder="닉네임 입력 (일부만 쳐보세요)" autocomplete="off">
+        <div id="suggestions" class="suggestions-list"></div>
+    </div>
+
+    <button onclick="checkRank()">판독하기</button>
+
+    <div id="resultBox" class="result">
+        <span id="emoji" class="level-emoji"></span>
+        <div id="levelTitle" class="level-title"></div>
+        <div id="userStats" class="stats"></div>
+    </div>
+</div>
+
+<script>
+    const userData = {
+      "세종포도": { "given": 6, "received": 5 },
+      "덕톡방몰살프로젝트머신": { "given": 6, "received": 6 },
+      "녹청": { "given": 22, "received": 10 },
+      "소종여(학사경고경고)": { "given": 34, "received": 12 },
+      "레니닌": { "given": 1, "received": 9 },
+      "꼬마어새신": { "given": 1, "received": 12 },
+      "여중생쟝": { "given": 2, "received": 6 },
+      "̔": { "given": 0, "received": 11 },
+      "대중노": { "given": 1, "received": 4 },
+      "Nongemini": { "given": 10, "received": 3 },
+      "치즈 고르기아스": { "given": 1, "received": 1 },
+      "김솦붕 the 김솦붕": { "given": 3, "received": 6 },
+      "쿠모로즈": { "given": 3, "received": 3 },
+      "토성인": { "given": 0, "received": 0 },
+      "우마루": { "given": 1, "received": 1 },
+      "경영맘(다이어트, -3일차)": { "given": 5, "received": 0 },
+      "그림쟁이": { "given": 2, "received": 1 },
+      "매일밤 폐관 수련 뱁새": { "given": 0, "received": 2 },
+      "대덕사": { "given": 9, "received": 2 },
+      "ㅇㅇ(104.28)": { "given": 5, "received": 8 },
+      "페이퍼": { "given": 2, "received": 1 },
+      "가츠동(곧먹음)": { "given": 0, "received": 1 },
+      "시험말린호박": { "given": 5, "received": 4 },
+      "컴평(최정예)": { "given": 0, "received": 0 },
+      "능청": { "given": 24, "received": 3 },
+      "잔기 -9999💀": { "given": 0, "received": 0 },
+      "버거": { "given": 3, "received": 3 },
+      "멘헤라호소인": { "given": 1, "received": 0 },
+      "물리그게 뭐야": { "given": 2, "received": 1 },
+      "rabbithouse": { "given": 0, "received": 1 },
+      "괭": { "given": 0, "received": 2 },
+      "게을킹(학사경고경고)": { "given": 0, "received": 0 },
+      "람다,시온이랑생일같음": { "given": 0, "received": 0 },
+      "M200is": { "given": 0, "received": 1 },
+      "류코사랑단": { "given": 0, "received": 1 },
+      "영송이": { "given": 0, "received": 0 },
+      "메구밍 사랑단": { "given": 0, "received": 1 },
+      "체리피츄": { "given": 2, "received": 1 },
+      "건축이뭐야(군휴학)": { "given": 0, "received": 0 },
+      "0": { "given": 0, "received": 0 },
+      "53사해기동대thumbs up(상병)": { "given": 0, "received": 0 },
+      "이응": { "given": 0, "received": 0 },
+      "E:Z": { "given": 0, "received": 0 },
+      "공듀님만만세": { "given": 0, "received": 0 },
+      "갤넴": { "given": 0, "received": 3 },
+      "이리다여": { "given": 0, "received": 0 },
+      "화석": { "given": 0, "received": 0 },
+      "yuicraft": { "given": 0, "received": 0 },
+      "퇴계동감자": { "given": 0, "received": 0 },
+      "아루담당일진": { "given": 0, "received": 0 },
+      "♥오타쿠지망생♥": { "given": 0, "received": 0 },
+      "201 신속대응여단(드론운용/정비)": { "given": 0, "received": 0 },
+      "irisuki": { "given": 0, "received": 0 },
+      "lunedRB": { "given": 0, "received": 0 },
+      "자칭애갤아이돌유수박": { "given": 0, "received": 0 },
+      "아도아범": { "given": 0, "received": 0 },
+      "엄지척 어피치": { "given": 0, "received": 0 },
+      "땅거미": { "given": 0, "received": 0 },
+      "밥바밥": { "given": 0, "received": 0 },
+      "하요리": { "given": 0, "received": 0 },
+      "AD": { "given": 0, "received": 0 },
+      "u2u2": { "given": 0, "received": 0 },
+      "지브리만취급함": { "given": 0, "received": 0 },
+      "아야스탕스": { "given": 0, "received": 0 },
+      "메구밍냥/홍마족": { "given": 0, "received": 0 },
+      "화난 스카피": { "given": 0, "received": 0 },
+      "아즈렝처돌이": { "given": 0, "received": 0 },
+      "나른한 니니즈": { "given": 0, "received": 0 },
+      "하이": { "given": 0, "received": 1 },
+      "PKBM": { "given": 0, "received": 0 },
+      "도넛": { "given": 0, "received": 0 },
+      "극악무도한블아애호가": { "given": 0, "received": 0 },
+      "눈물바다에 빠진 라이언": { "given": 0, "received": 0 },
+      "벙찐 튜브": { "given": 0, "received": 0 },
+      "자유": { "given": 0, "received": 0 },
+      "초졸": { "given": 0, "received": 1 },
+      "마이크를 든 라이언": { "given": 0, "received": 0 },
+      "프리렌": { "given": 0, "received": 0 },
+      "ㅎㅇ": { "given": 0, "received": 0 },
+      "돈 뿌리는 라이언": { "given": 0, "received": 0 },
+      "Zizzang": { "given": 0, "received": 0 },
+      "SWN": { "given": 0, "received": 0 },
+      "돌맹이": { "given": 0, "received": 0 },
+      "맛동산": { "given": 0, "received": 0 },
+      "세미나노아": { "given": 0, "received": 0 },
+      "씹덕 노래 듣는 슬라임": { "given": 0, "received": 0 }
+    };
+
+    const userNames = Object.keys(userData);
+    const inputField = document.getElementById('nicknameInput');
+    const suggestionsBox = document.getElementById('suggestions');
+
+    // 1. 입력 감지 및 자동완성 목록 표시
+    inputField.addEventListener('input', function() {
+        const value = this.value.toLowerCase();
+        suggestionsBox.innerHTML = ''; // 목록 초기화
+
+        if (!value) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+
+        // 입력한 글자가 포함된 닉네임 찾기
+        const matches = userNames.filter(name => name.toLowerCase().includes(value));
+
+        if (matches.length > 0) {
+            matches.forEach(match => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = match;
+                
+                // 항목 클릭 시 입력창에 넣기
+                div.onclick = function() {
+                    selectName(match);
+                };
+                
+                suggestionsBox.appendChild(div);
+            });
+            suggestionsBox.style.display = 'block';
+        } else {
+            suggestionsBox.style.display = 'none';
+        }
+    });
+
+    // 2. 닉네임 선택 함수
+    function selectName(name) {
+        inputField.value = name;
+        suggestionsBox.style.display = 'none';
+        checkRank(); // 선택하자마자 바로 결과 보여주기 (옵션)
+    }
+
+    // 3. 외부 클릭 시 목록 닫기
+    document.addEventListener('click', function(e) {
+        if (!inputField.contains(e.target) && !suggestionsBox.contains(e.target)) {
+            suggestionsBox.style.display = 'none';
+        }
+    });
+
+    // 4. 계급 판독 로직 (기존과 동일)
+    function checkRank() {
+        const inputName = inputField.value.trim();
+        const resultBox = document.getElementById('resultBox');
+        const emojiSpan = document.getElementById('emoji');
+        const titleDiv = document.getElementById('levelTitle');
+        const statsDiv = document.getElementById('userStats');
+
+        if (!inputName) {
+            alert("닉네임을 입력해주세요!");
+            return;
+        }
+
+        const user = userData[inputName];
+
+        if (!user) {
+            alert("데이터에 없는 닉네임입니다. 자동완성 목록을 눌러보세요!");
+            resultBox.style.display = 'none';
+            return;
+        }
+
+        const given = user.given;
+        const received = user.received;
+        let levelTitle = "";
+        let levelEmoji = "";
+
+        // 레벨 로직
+        if (given <= 1 && received <= 1) {
+            levelTitle = "Level 0. 유령 또는 신입";
+            levelEmoji = "👻";
+        } else {
+            let ratio = 0;
+            if (given === 0) {
+                ratio = 9999; 
+            } else {
+                ratio = received / given;
+            }
+
+            if (ratio >= 3) {
+                levelTitle = "Level 1. 쌀킹";
+                levelEmoji = "🫅";
+            } else if (ratio >= 2) {
+                levelTitle = "Level 2. 쌀숭이";
+                levelEmoji = "🐵";
+            } else if (ratio > 0.5) {
+                levelTitle = "Level 3. 평민";
+                levelEmoji = "👤";
+            } else if (ratio > 0.33333) {
+                levelTitle = "Level 4. 천사";
+                levelEmoji = "😇";
+            } else {
+                levelTitle = "Level 5. 산타클로스";
+                levelEmoji = "🎅";
+            }
+        }
+
+        emojiSpan.textContent = levelEmoji;
+        titleDiv.textContent = levelTitle;
+        statsDiv.textContent = `(쏜 횟수: ${given}회 / 받은 횟수: ${received}회)`;
+        resultBox.style.display = 'block';
+    }
+
+    inputField.addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            // 자동완성 목록이 떠있다면 첫 번째 항목 선택, 아니면 판독
+            if (suggestionsBox.style.display === 'block' && suggestionsBox.firstChild) {
+                selectName(suggestionsBox.firstChild.textContent);
+            } else {
+                checkRank();
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
